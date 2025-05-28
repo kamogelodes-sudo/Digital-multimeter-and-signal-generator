@@ -1,0 +1,3073 @@
+/* USER CODE BEGIN Header */
+/**
+ ******************************************************************************
+ * @file           : main.c
+ * @brief          : Main program body
+ ******************************************************************************
+ * @attention
+ *
+ * <h2><center>&copy; Copyright (c) 2022 STMicroelectronics.
+ * All rights reserved.</center></h2>
+ *
+ * This software component is licensed by ST under BSD 3-Clause license,
+ * the "License"; You may not use this file except in compliance with the
+ * License. You may obtain a copy of the License at:
+ *                        opensource.org/licenses/BSD-3-Clause
+ *
+ ******************************************************************************
+ */
+/* USER CODE END Header */
+
+/* Includes ------------------------------------------------------------------*/
+#include "main.h"
+
+/* Private includes ----------------------------------------------------------*/
+/* USER CODE BEGIN Includes */
+#include "lcd.h"
+#include "math.h"
+/* USER CODE END Includes */
+
+/* Private typedef -----------------------------------------------------------*/
+/* USER CODE BEGIN PTD */
+
+/* USER CODE END PTD */
+
+/* Private define ------------------------------------------------------------*/
+/* USER CODE BEGIN PD */
+#define MEASURE_STATE 1
+#define MENU_STATE 2
+
+/* USER CODE END PD */
+
+/* Private macro -------------------------------------------------------------*/
+/* USER CODE BEGIN PM */
+
+/* USER CODE END PM */
+
+/* Private variables ---------------------------------------------------------*/
+ADC_HandleTypeDef hadc1;
+
+DAC_HandleTypeDef hdac1;
+DMA_HandleTypeDef hdma_dac1_ch1;
+
+I2C_HandleTypeDef hi2c1;
+
+TIM_HandleTypeDef htim1;
+TIM_HandleTypeDef htim2;
+
+UART_HandleTypeDef huart2;
+
+/* USER CODE BEGIN PV */
+uint8_t stdno[13] = "@,21809453,!\n";
+uint8_t rdata[1];
+uint8_t fulldata[13];
+uint8_t uartRec = 0;
+uint8_t uartRxIndex = 0;
+uint8_t rxCompleteFlag = 0;
+uint8_t testflag = 0;
+uint8_t measureMode[2];
+uint8_t UARToutput[13];
+uint8_t UARToutFlag = 0;
+uint8_t statusFlag = 0;
+uint8_t measFlag = 0;
+uint8_t outState = 0;
+uint8_t measureParam;
+uint8_t state = 0;
+int th, h, t, u;
+float debug, debugu, debugt, debugh, debugth;
+uint8_t resetFlag = 0;
+uint8_t upflag = 0;
+
+float Vdc;
+uint32_t adc_val[5000];
+//uint32_t sampleNumber = 500;
+uint32_t sampleNumber = 5000;
+uint8_t lowFreqShift;
+float vave;
+float vsum;
+uint32_t Freqindex;
+uint32_t adcindex = 0;
+float amplitude;
+float max;
+float max2;
+float min;
+uint8_t adcComplete;
+
+float period, freq, periodindex;
+float critp = 0.01;
+uint32_t seedIndex = 10;
+uint32_t tempindex;
+float adjustment = 1.06;
+float ampadjustment =1.05;
+float ACadjustment = 1.4;
+
+//float adjustment = 1.2;
+//float adjustment = 1.4;
+//uint16_t f1,f2,f3,f4;
+int count = 0;
+uint32_t localMax;
+int localMaxIndex = 0;
+uint32_t localMin;
+uint8_t goingUp = 1;
+uint32_t prfreq;
+int hitCount = 0;
+int runTotal = 0;
+int localMinIndex = 0;
+
+
+//dac
+float val = 1.6;
+float var;
+uint32_t sinSample = 10000;
+uint32_t sine_val[10000]; //[sinSample]
+uint32_t debugV = 1248;
+uint32_t setF = 1000;
+uint32_t samplenum;
+uint32_t freqtime2 = 100000;
+uint8_t restartdacflag = 1;
+uint8_t prevOutState = 0;
+uint8_t typeflag = 's';
+//uint8_t DCflag = 0;
+uint32_t outAmplitude = 1000; //mV
+uint32_t outOffset = 1200; //mV
+uint32_t DCoutOffset = 1000; //mV
+//uint32_t digitaloffset;
+uint32_t digitalpkpk;
+uint32_t pamplitudepkpk = 1000;
+uint32_t pduty = 50;
+uint32_t poffset = 0;
+uint32_t pfrequency = 1000;
+
+
+
+//work of 21905657
+uint8_t charFlag = 0;
+uint8_t lcdOnFlag = 0;
+uint8_t lcdrefreshFlag = 0;
+char debugChar[];
+char line1[16];
+char line2[43];
+
+uint8_t i2cdata[2];
+
+uint8_t menu = 0;
+uint8_t left = 0;
+uint8_t up = 0;
+uint8_t right = 0;
+uint8_t down = 0;
+uint8_t middle = 0;
+
+
+//Pulse
+uint32_t pul_duty = 25;
+uint32_t pul_offset = 1200;
+uint32_t pul_pkpk = 1000;
+uint32_t temp_pkpk = 0;
+uint32_t temp_off = 0;
+uint32_t pul_total = 0;
+
+
+//Pulse freq
+uint32_t pul_sinSample = 10000;
+uint32_t pul_setF = 1000;
+uint32_t pul_freqtime2 = 100000;
+
+//Arrays for variables
+uint8_t Amparr[4];
+uint8_t Offarr[4];
+uint8_t Freqarr[4];
+
+
+uint8_t ACAmparr[4];
+uint8_t PulAmparr[4];
+
+uint8_t DCOffarr[4];
+uint8_t ACOffarr[4];
+uint8_t PulOffarr[4];
+
+uint8_t ACFreqarr[4];
+uint8_t PulFreqarr[4];
+
+uint8_t DutyCarr[4];
+
+uint8_t MeasAmparr[2];
+uint8_t MeasOffarr[2];
+
+
+// ?O:x.xxxV,A:x.xxxV,F:xxxxHz
+//123456789012345678901234567890123
+//O:x.xxxA,A:x.xxxA,F:xxxxHz,D:xxx%
+#define PI 3.1415926
+
+
+
+//Optimise functions
+
+//4096/2 = 2048
+#define PI 3.1415926
+float pi2 = 2 * PI;
+//pi2 = 2 *PI;
+uint32_t ampsin;
+float halfvar;
+float final_duty;
+
+
+void calcsin(uint8_t X) {
+	for (int i = 0; i < X; i++) //i<sinSample
+			{
+		//sine_val[i] = ((sin(i * 2 * PI / X) + 1) * (4096 / 2)); //PI/sinSample
+		sine_val[i] = ((sin(i * pi2 / X) + 1) * 2048);
+
+	}
+}
+
+void ACcalcsin(uint32_t X) {
+	for (int i = 0; i < X; i++) //i<sinSample
+			{
+		//sine_val[i] = (((sin(i * 2 * PI / X)) * (digitalpkpk /2)) + var)/2; //PI/sinSample also divide by 2 for gain
+		sine_val[i] = (sin(i * pi2 / X))*ampsin + halfvar; //PI/sinSample also divide by 2 for gain
+	}
+}
+
+
+void Pulsine(uint32_t X)
+{
+	for (int i = 0; i < X; i++) //i<sinSample
+				{//for
+
+		if(i > (X - X * (float)pul_duty/100))
+		{//if
+			sine_val[i] = pul_offset + pul_pkpk;
+			//sine_val[i] = pul_total;
+
+		}//if
+		else
+		{//else
+
+			sine_val[i] = pul_offset;
+
+		}//else
+
+		}//for
+
+}
+
+void getzero()
+{
+	for (int i = 0; i < 1000; i++) //i<sinSample
+	{
+
+		sine_val[i] = 0;
+
+	}
+
+}
+
+
+
+//MENU VARIABLES//
+uint8_t change2 = 0;
+float lcddis = 0;
+float lcddis1 = 0;
+float lcddis2 = 0;
+
+enum modes{NONE,DCV, DCC, ACV, ACC, DC, SIN, PULSE, ON, OFF, AMP, OFFSET, FREQ, DUTY};
+enum modes mode = NONE;
+enum modes premode = NONE;
+enum modes premode2 = NONE;
+enum modes set = NONE;
+enum modes set2 = NONE;
+uint8_t change = 1;
+uint8_t first_time = 1;
+uint8_t output_lcd = 0;
+
+GPIO_PinState middle;
+GPIO_PinState up;
+GPIO_PinState down;
+GPIO_PinState left;
+GPIO_PinState right;
+int menucheck;
+
+uint8_t display_state = MENU_STATE;
+uint32_t tLast1 = 0;
+uint8_t buttonStateMiddle = 0;
+uint8_t buttonStateUp = 0;
+uint8_t buttonStateDown = 0;
+uint8_t buttonStateLeft = 0;
+uint8_t buttonStateRight = 0;
+
+int level = 0;
+int horilevel = 0;
+int zeroes = 0000;
+int zero = 0;
+uint8_t eval = 0;
+uint8_t confirm = 0;
+
+uint8_t LFlag1 = 0;
+uint8_t LFlag2 = 0;
+uint8_t LFlag3 = 0;
+uint8_t dawg = 0;
+
+int Ampvalue = 0;
+//MENU VARIABLES//
+
+
+
+/* USER CODE END PV */
+
+/* Private function prototypes -----------------------------------------------*/
+void SystemClock_Config(void);
+static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
+static void MX_ADC1_Init(void);
+static void MX_USART2_UART_Init(void);
+static void MX_DAC1_Init(void);
+static void MX_I2C1_Init(void);
+static void MX_TIM1_Init(void);
+static void MX_TIM2_Init(void);
+/* USER CODE BEGIN PFP */
+void checkAndStoreUart();
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+
+	HAL_UART_Receive_IT(&huart2, rdata, 1);
+	checkAndStoreUart();
+}
+uint8_t buttonBounce();
+uint8_t upButtonBounce();
+uint8_t leftButtonBounce();
+uint8_t rightButtonBounce();
+uint8_t downButtonBounce();
+void processUart();
+/* USER CODE END PFP */
+
+/* Private user code ---------------------------------------------------------*/
+/* USER CODE BEGIN 0 */
+
+/* USER CODE END 0 */
+
+/**
+  * @brief  The application entry point.
+  * @retval int
+  */
+int main(void)
+{
+  /* USER CODE BEGIN 1 */
+	//@,*,s,0,!\n
+//@,*,m,o,!\n
+//@,$,AI,!\n
+	/*var = (uint32_t)val*(4096)/3.3;
+	 for (int i; i<10; i++){
+	 sine_val[i] = var;
+	 }*/
+
+//	HAL_DAC_Start_DMA(&hdac1, DAC1_CHANNEL_1, sine_val, 10, DAC_ALIGN_12B_R);
+	UARToutput[0] = '@';
+	UARToutput[1] = ',';
+	measureMode[0] = 'D';
+	measureMode[1] = 'V';
+
+	 //pul_offset = (pul_offset)/2;
+	 //pul_pkpk = (pul_pkpk)/2;
+
+	temp_off = (pul_offset)/2;
+	temp_pkpk = (pul_pkpk)/2;
+	//Lcd_clear(&lcd);
+
+
+	//orignal defaults
+
+	Amparr[0] = 0;
+	Amparr[1] = 0;
+	Amparr[2] = 0;
+	Amparr[3] = 0;
+
+
+	Offarr[0] = 0;
+	Offarr[1] = 0;
+	Offarr[2] = 0;
+	Offarr[3] = 0;
+
+
+	Freqarr[0] = 0;
+	Freqarr[1] = 0;
+	Freqarr[2] = 0;
+	Freqarr[3] = 0;
+
+	DutyCarr[0] = 0;
+	DutyCarr[1] = 0;
+	DutyCarr[2] = 0;
+	DutyCarr[3] = 0;
+
+	MeasAmparr[0] = 0;
+	MeasAmparr[1] = 0;
+	//MeasAmparr[2] = 0;
+	//MeasAmparr[3] = 0;
+
+
+	MeasOffarr[0] = 1;
+	MeasOffarr[1] = 0;
+	//MeasOffarr[2] = 0;
+	//MeasOffarr[3] = 0;
+
+	/*
+	//default amplitude
+	ACAmparr[0] = 1;
+	ACAmparr[1] = 0;
+	ACAmparr[2] = 0;
+	ACAmparr[3] = 0;
+
+	PulAmparr[0] = 1;
+	PulAmparr[1] = 0;
+	PulAmparr[2] = 0;
+	PulAmparr[3] = 0;
+
+	DCOffarr[0] = 1;
+	DCOffarr[1] = 2;
+	DCOffarr[2] = 0;
+	DCOffarr[3] = 0;
+
+	ACOffarr[0] = 1;
+	ACOffarr[1] = 2;
+	ACOffarr[2] = 0;
+	ACOffarr[3] = 0;
+
+	PulOffarr[0] = 1;
+	PulOffarr[1] = 2;
+	PulOffarr[2] = 0;
+	PulOffarr[3] = 0;
+
+	PulFreqarr[0] = 1;
+	PulFreqarr[1] = 0;
+	PulFreqarr[2] = 0;
+	PulFreqarr[3] = 0;
+
+	ACFreqarr[0] = 1;
+	ACFreqarr[1] = 0;
+	ACFreqarr[2] = 0;
+	ACFreqarr[3] = 0;
+
+	*/
+
+
+
+	/*
+
+	//Arrays default
+	 ACAmparr[4] = 1000;
+	 PulAmparr[4] = "1000";
+
+	 DCOffarr[4] = "1200";
+	 ACOffarr[4] = "1200";
+	 PulOffarr[4] = "1200";
+
+	 ACFreqarr[4] = "1000";
+	 PulFreqarr[4] = "1000";
+
+	 DutyCarr[4] = "0025";
+*/
+
+
+  /* USER CODE END 1 */
+
+  /* MCU Configuration--------------------------------------------------------*/
+
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
+
+  /* USER CODE BEGIN Init */
+
+  /* USER CODE END Init */
+
+  /* Configure the system clock */
+  SystemClock_Config();
+
+  /* USER CODE BEGIN SysInit */
+
+  /* USER CODE END SysInit */
+
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  MX_DMA_Init();
+  MX_ADC1_Init();
+  MX_USART2_UART_Init();
+  MX_DAC1_Init();
+  MX_I2C1_Init();
+  MX_TIM1_Init();
+  MX_TIM2_Init();
+  /* USER CODE BEGIN 2 */
+	HAL_UART_Transmit(&huart2, stdno, 13, 50);
+	HAL_UART_Receive_IT(&huart2, rdata, 1);
+
+	if (HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED) != HAL_OK) //CC https://www.youtube.com/watch?v=Yt5cHkmtqlA
+		Error_Handler();
+
+	if (HAL_ADC_Start_IT(&hadc1) != HAL_OK)
+		Error_Handler();
+
+	// start pwm generation
+	if (HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1) != HAL_OK)
+		Error_Handler();
+
+	HAL_TIM_Base_Start(&htim2);
+
+
+	sinSample = freqtime2 / setF;
+	pul_sinSample = pul_freqtime2/pul_setF;
+	//sinSample = 20;
+	calcsin(sinSample);
+	HAL_DAC_Start_DMA(&hdac1, DAC1_CHANNEL_1, sine_val, sinSample,
+			DAC_ALIGN_12B_R);
+
+	// Lcd_PortType ports[] = { D4_GPIO_Port, D5_GPIO_Port, D6_GPIO_Port, D7_GPIO_Port };
+	Lcd_PortType ports[] = { GPIOA, GPIOC, GPIOC, GPIOC };
+	// Lcd_PinType pins[] = {D4_Pin, D5_Pin, D6_Pin, D7_Pin};
+	Lcd_PinType pins[] = { GPIO_PIN_12, GPIO_PIN_5, GPIO_PIN_6, GPIO_PIN_8 };
+	Lcd_HandleTypeDef lcd;
+	// Lcd_create(ports, pins, RS_GPIO_Port, RS_Pin, EN_GPIO_Port, EN_Pin, LCD_4_BIT_MODE);
+	lcd = Lcd_create(ports, pins, GPIOA, GPIO_PIN_8, GPIOA, GPIO_PIN_11, LCD_4_BIT_MODE);
+
+	lcdOnFlag = 1;
+
+    tLast1 = HAL_GetTick();
+
+  /* USER CODE END 2 */
+
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
+	while (1)
+	{
+
+		Amparr[0] = (outAmplitude-(outAmplitude%1000))/1000;
+		Amparr[1] = (outAmplitude-(outAmplitude%100)-Amparr[0]*1000)/100;
+		Amparr[2] = (outAmplitude-(outAmplitude%10)- Amparr[1]*100 - Amparr[0]*1000)/10;
+		Amparr[3] = (outAmplitude- Amparr[1]*100 - Amparr[2]*10 - Amparr[0]*1000)/1;
+
+
+		Offarr[0] = (outOffset-(outOffset%1000))/1000;
+		Offarr[1] = (outOffset-(outOffset%100)-Offarr[0]*1000)/100;
+		Offarr[2] = (outOffset-(outOffset%10)- Offarr[1]*100 - Offarr[0]*1000)/10;
+		Offarr[3] = (outOffset- Offarr[1]*100 - Offarr[2]*10 - Offarr[0]*1000)/1;
+
+
+
+		Freqarr[0] = (setF-(setF%1000))/1000;
+		Freqarr[1] = (setF-(setF%100)-Freqarr[0]*1000)/100;
+		Freqarr[2] = (setF-(setF%10)- Freqarr[1]*100 - Freqarr[0]*1000)/10;
+		Freqarr[3] = (setF- Freqarr[1]*100 - Freqarr[2]*10 - Freqarr[0]*1000)/1;
+
+		//DutyCarr
+
+		DutyCarr[0] = (pul_duty-(pul_duty %1000)) / 1000;
+		DutyCarr[1] = (pul_duty-(pul_duty%100)-DutyCarr[0]*1000)/100;
+		DutyCarr[2] = (pul_duty-(pul_duty%10)- DutyCarr[1]*100 - DutyCarr[0]*1000)/10;
+		DutyCarr[3] = (pul_duty- DutyCarr[1]*100 - DutyCarr[2]*10 - DutyCarr[0]*1000)/1;
+
+		//Meas
+
+		/*
+		 debugu = ((int) (vave * 1000) % 10);
+					debugt = ((int) (vave * 1000) % 100 - u) / 10;
+					debugh = ((int) (vave * 1000) % 1000 - u - t) / 100; //work of 21905657
+					debugth = ((int) (vave * 1000) - u - t * 10 - h * 100)/ 1000;
+		 */
+
+
+		MeasOffarr[0] = ((int)(vave*1000) - ((int)(vave*1000)%1000))/1000;
+		MeasOffarr[1] = ((int)(vave*1000)-(((int)vave*1000) %100)-MeasOffarr[0]*1000) / 100;
+
+
+		MeasAmparr[0] = ((int)(amplitude*1000)-(((int)amplitude*1000)%1000)) / 1000;
+		MeasAmparr[1] =((int)(amplitude*1000)-(((int)amplitude*1000) %100)-MeasAmparr[0]*1000)/100;
+
+
+
+		if(uartRec)
+		{
+			checkAndStoreUart();
+		}
+
+
+		if (rxCompleteFlag)
+		{
+			change2 = 1;//OUTPUT TO CHANGE ON LCD
+
+			if (fulldata[2] == '$')
+			{
+				set = NONE;
+				measureMode[0] = fulldata[4];
+				measureMode[1] = fulldata[5];	//work of 21905657
+
+				if(measureMode[1] == 'I')
+				{
+					HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, 1);
+					HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 1);
+					if(measureMode[0] == 'A')
+					{
+						premode = ACC;
+					}
+					if(measureMode[0] == 'D')
+					{
+						premode = DCC;
+
+					}
+				}
+
+				if(measureMode[1] == 'V')
+				{
+					HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, 1);
+					HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 0);
+					if(measureMode[0] == 'D')
+					{
+						premode = DCV;
+					}
+					if(measureMode[0] == 'A')
+					{
+						premode = ACV;
+					}
+				}
+			}
+
+			else if (fulldata[4] == 's')
+			{
+				prevOutState = outState;
+				outState = fulldata[6] - 48;
+				UARToutFlag = 1;
+				statusFlag = 1;
+				if((prevOutState==0)&&(outState==1))
+				{
+					restartdacflag = 1;
+				}
+
+
+
+			}
+
+			else if (fulldata[4] == 'm')
+			{
+				measureParam = fulldata[6];
+				UARToutFlag = 1;
+				measFlag = 1;
+			}
+
+			else if (fulldata[2] == '^')
+			{
+					switch(fulldata[4])
+					{//switch
+					case 't':
+						typeflag = fulldata[6];
+						restartdacflag = 1;
+					break;
+
+					case 'a':
+						debugu = (fulldata[9] - 48);
+						debugt = (fulldata[8]-48)*10;
+						debugh = (fulldata[7]-48)*100;
+						debugth = (fulldata[6] - 48)*1000;
+						outAmplitude = debugu + debugt + debugh + debugth;
+
+
+
+						restartdacflag = 1;
+						break;
+
+					case 'o':
+						debugu = (fulldata[9] - 48);
+						debugt = (fulldata[8]-48)*10;
+						debugh = (fulldata[7]-48)*100;
+						debugth = (fulldata[6] - 48)*1000;
+						outOffset = debugu + debugt + debugh + debugth;
+						restartdacflag = 1; // still work of 21905657
+						Offarr[0] = debugu/1000;
+						Offarr[1] = debugt/100;
+						Offarr[2] = debugh/10;
+						Offarr[3] = debugth;
+						break;
+
+					case 'f':
+						debugu = (fulldata[9] - 48);
+						debugt = (fulldata[8]-48)*10;
+						debugh = (fulldata[7]-48)*100;
+						debugth = (fulldata[6] - 48)*1000;
+						setF = debugu + debugt + debugh + debugth;
+						restartdacflag = 1;
+						Freqarr[0] = debugu/1000;
+						Freqarr[1] = debugt/100;
+						Freqarr[2] = debugh/10;
+						Freqarr[3] = debugth;
+						break;
+
+
+
+					case 'd':
+						debugu = (fulldata[9] - 48);
+						debugt = (fulldata[8]-48)*10;
+						debugh = (fulldata[7]-48)*100;
+						debugth = (fulldata[6] - 48)*1000;
+						pul_duty = debugu + debugt + debugh + debugth;
+						restartdacflag = 1;
+						DutyCarr[0] = debugu/1000;
+						DutyCarr[1] = debugt/100;
+						DutyCarr[2] = debugh/10;
+						DutyCarr[3] = debugth;
+						break;
+
+					}//switch
+
+			}//^
+
+			else if (fulldata[2] == '#')
+			{ //work of 21905657
+				if((fulldata[4] == '1'))
+				{
+					if((charFlag == 0))
+					{
+						lcd_write_command(&lcd, 0x01);
+						Lcd_cursor(&lcd, 0, 0); //cursor line1 x-coordinate23
+						charFlag = 1; //reset char flag when state changes
+						*(debugChar) = fulldata[6];
+						Lcd_string(&lcd,debugChar);
+					}
+
+					else
+					{
+						*(debugChar) = fulldata[6];
+						Lcd_string(&lcd,debugChar);
+					}
+
+				}
+
+				else
+				{
+
+					if(fulldata[6] == 10){
+						Lcd_cursor(&lcd, 1, 0);
+					}
+
+
+					else lcd_write_command(&lcd, fulldata[6]);
+				}
+			}
+
+			if((charFlag == 1) && (fulldata[2] != '#'))
+			{
+				lcd_write_command(&lcd, 0x01);
+				charFlag = 0;
+			}
+			rxCompleteFlag = 0;
+			resetFlag = 1;
+
+		}//rxcomplete
+
+		if (resetFlag)
+		{
+			fulldata[0] = '\0';
+			fulldata[1] = fulldata[0];
+			fulldata[2] = fulldata[0];
+			fulldata[3] = fulldata[0];
+			fulldata[4] = fulldata[0];
+			fulldata[5] = fulldata[0];
+			fulldata[6] = fulldata[0];
+			fulldata[7] = fulldata[0];
+			fulldata[8] = fulldata[0];	//resetting the UART array - I did this for debugging purposes, not necessary
+			fulldata[9] = fulldata[0];
+			fulldata[10] = fulldata[0];
+			fulldata[11] = fulldata[0];
+			fulldata[12] = fulldata[0];
+
+			resetFlag = 0;
+		}
+
+		if (UARToutFlag)
+		{
+			if (statusFlag)
+			{
+				UARToutput[3 - 1] = measureMode[0];
+				UARToutput[4 - 1] = measureMode[1];
+				UARToutput[5 - 1] = ',';
+				UARToutput[6 - 1] = typeflag;
+				UARToutput[7 - 1] = ',';
+				UARToutput[8 - 1] = outState + 48;
+				UARToutput[9 - 1] = ',';
+				UARToutput[10 - 1] = '!';
+				UARToutput[11 - 1] = '\n';
+				UARToutput[12 - 1] = '\0';
+				UARToutput[13 - 1] = '\0';
+				HAL_UART_Transmit_IT(&huart2, UARToutput, sizeof(UARToutput));
+
+				if(outState == 0)
+				{
+					HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, 0);
+				}
+
+				if(outState == 1)
+				{
+					HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, 1);
+
+				}
+
+			}
+			else if (measFlag)
+			{
+				if (measureParam == 'o')
+				{//dc offset
+					debug = 0;
+					u = 0;
+					t = 0;
+					h = 0;
+					th = 0;
+					debugu = 0;
+					debugt = 0;
+					debugh = 0;
+					debugth = 0;
+					debug = vave;
+					debugu = ((int) (vave * 1000) % 10);
+					debugt = ((int) (vave * 1000) % 100 - u) / 10;
+					debugh = ((int) (vave * 1000) % 1000 - u - t) / 100; //work of 21905657
+					debugth = ((int) (vave * 1000) - u - t * 10 - h * 100)/ 1000;
+					if (debugu < 0)
+						debugu = 0;
+					if (debugt < 0)
+						debugt = 0;
+					if (debugh < 0)
+						debugh = 0;
+					if (debugth < 0)
+						debugth = 0;
+					u = 48 + debugu;
+					t = 48 + debugt;
+					h = 48 + debugh;
+					th = 48 + debugth;
+				}//dc offset
+				else if (measureParam == 'a')
+				{//ampl
+					debug = 0;
+				    u = 0;
+					t = 0;
+					h = 0;
+					th = 0;
+					debugu = 0;
+					debugt = 0;
+					debugh = 0;
+					debugth = 0;
+					debug = amplitude;
+					debugu = ((int) (amplitude * 1000) % 10);
+					debugt = ((int) (amplitude * 1000) % 100 - u) / 10;
+					debugh = ((int) (amplitude * 1000) % 1000 - u - t) / 100; //work of 21905657
+					debugth = ((int) (amplitude * 1000) - u - t * 10 - h * 100)/ 1000;
+					if (debugu < 0)
+						debugu = 0;
+					if (debugt < 0)
+						debugt = 0;
+					if (debugh < 0)
+						debugh = 0;
+					if (debugth < 0)
+						debugth = 0;
+					u = 48 + debugu;
+					t = 48 + debugt;
+					h = 48 + debugh;
+					th = 48 + debugth;
+
+				}//ampl
+				else if(measureParam == 'f')
+				{//freq
+					debug = 0;
+					u = 0;
+					t = 0;
+					h = 0;
+					th = 0;
+					debugu = 0;
+					debugt = 0;
+					debugh = 0;
+					debugth = 0;
+					debug = prfreq;
+					debugu = ((int) (prfreq) % 10);
+					debugt = ((int) (prfreq) % 100 - u) / 10;
+					debugh = ((int) (prfreq) % 1000 - u - t) / 100; //work of 21905657
+					debugth = ((int) (prfreq) - u - t * 10 - h * 100)/ 1000;
+					if (debugu < 0)
+						debugu = 0;
+					if (debugt < 0)
+						debugt = 0;
+					if (debugh < 0)
+						debugh = 0;
+					if (debugth < 0)
+						debugth = 0;
+					u = 48 + debugu;
+					t = 48 + debugt;
+					h = 48 + debugh;
+					th = 48 + debugth;
+
+
+
+				}//freq
+
+
+				UARToutput[3 - 1] = 'm';
+				UARToutput[4 - 1] = ',';
+				UARToutput[5 - 1] = measureParam;
+				UARToutput[6 - 1] = ',';
+				UARToutput[7 - 1] = th;
+				UARToutput[8 - 1] = h;
+				UARToutput[9 - 1] = t;
+				UARToutput[10 - 1] = u;
+				UARToutput[11 - 1] = ',';
+				UARToutput[12 - 1] = '!';
+				UARToutput[13 - 1] = '\n';
+				HAL_UART_Transmit_IT(&huart2, UARToutput, sizeof(UARToutput));
+			}
+
+			measFlag = 0;
+			statusFlag = 0;
+			UARToutFlag = 0;
+		}
+		if (adcComplete) {
+						adcComplete = 0;
+						vave = ((vsum * (3.3 / 4095)) * adjustment) / sampleNumber; //this part calculates offset
+
+						max = adc_val[0];
+						for (Freqindex = 0; Freqindex < sampleNumber; Freqindex++) {//for max
+							if ((adc_val[Freqindex] > adc_val[Freqindex - 1])
+									&& (adc_val[Freqindex] > adc_val[Freqindex + 1])
+									&& (adc_val[Freqindex] > max)) {	//work of 21905657
+								max = adc_val[Freqindex];				// finds the max in the array
+							}
+						}//for max
+
+						min = adc_val[0];
+
+						for (Freqindex = 0; Freqindex < sampleNumber; Freqindex++) {//for max
+											if ((adc_val[Freqindex] < adc_val[Freqindex - 1])
+													&& (adc_val[Freqindex] < adc_val[Freqindex + 1])
+													&& (adc_val[Freqindex] < min)) {	//work of 21905657
+												min = adc_val[Freqindex];				// finds the max in the array
+											}
+										}//for max
+
+
+
+						max2 = max;
+
+						amplitude = ((max2 * 3.3 / 4095)*ampadjustment- vave)*2;
+						//amplitude = ((max2 * 3.3 / 4095)*ampadjustment);
+						//amplitude = (max2-min)/2;
+						//amplitude = ((max2 * 3.3 / 4095)- vave)*2;
+						//amplitude = (((max * 3.3 / 4095)- vave)*2)*ampadjustment;
+						//work of 21905657
+
+						max = 0;
+						vsum = 0;
+						min = 0;
+
+
+
+						//Work of 23648074
+						// Start Work of 23648074  							// this calculates the frequency
+						localMax = adc_val[1] * (3300 / 4095) * adjustment;
+						localMin = adc_val[0] * (3300 / 4095) * adjustment;
+						count = 0;
+						localMaxIndex = 0;
+						localMinIndex = 0;
+						goingUp = 1;
+						hitCount = 0;
+						runTotal = 0;
+
+						while (count < sampleNumber) // valcount = samplenumbernm
+						{
+							float old = adc_val[count];
+							double new = old * .850 / 1000;
+							if (goingUp) {
+								if (new > vave * 0.95) {
+									localMaxIndex = count;
+									localMax = adc_val[count] * (3300 / 4095) * adjustment;
+
+									goingUp = 0;
+
+									runTotal += localMaxIndex - localMinIndex;
+									hitCount++;
+
+								}
+
+							} else {
+								if (new < vave * 1.05) {
+									localMinIndex = count;
+									localMin = adc_val[count] * (3300 / 4095) * adjustment;	//Work of 23648074
+
+									goingUp = 1;
+
+									runTotal += localMinIndex - localMaxIndex;
+									hitCount++;
+
+								}
+
+							}
+							count++;
+
+						}																	// variable prfreq is the actual frequency
+
+						prfreq = 1 / ((float) runTotal / (float) hitCount) * 200 * 25; //end Work of 23648074
+
+					}
+
+
+		if((HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_8)) && (lcdOnFlag == 1))
+		{
+			lcdOnFlag =0;
+		}
+
+		if(outState == 0)
+		{
+			HAL_DAC_Stop_DMA(&hdac1, DAC1_CHANNEL_1);
+		}
+
+		else if (restartdacflag)
+		{//restartDAC
+
+			if(typeflag == 's')
+			{
+			HAL_DAC_Stop_DMA(&hdac1, DAC1_CHANNEL_1);
+			sinSample = freqtime2 / setF;
+			var = outOffset*(4096)/3300;
+			halfvar = var/2;
+			digitalpkpk = outAmplitude*(4096)/3300;
+			ampsin = digitalpkpk/4;
+			ACcalcsin(sinSample);
+
+			HAL_DAC_Start_DMA(&hdac1, DAC1_CHANNEL_1, sine_val, sinSample,DAC_ALIGN_12B_R);
+			restartdacflag = 0;
+			lcdOnFlag = 0;
+
+			//checking that UART will update screen//
+			premode2 = SIN;
+			set2 = NONE;
+			output_lcd = 1;
+			//end of check//
+			}
+			else if((typeflag == 'd'))
+			{
+				HAL_DAC_Stop_DMA(&hdac1, DAC1_CHANNEL_1);
+				sinSample = 10;
+				var = outOffset*(4096)/3300;
+				 for (int i = 0; i<sinSample; i++)
+				 {
+					 sine_val[i] = var/2;
+				 }
+
+				 HAL_DAC_Start_DMA(&hdac1, DAC1_CHANNEL_1, sine_val, sinSample,DAC_ALIGN_12B_R);
+				 restartdacflag = 0;
+				 lcdOnFlag = 0;  // end work of 21905657
+
+					premode2 = DC;
+					set2 = NONE;
+					output_lcd = 1;
+			}
+
+
+			else if((typeflag == 'p'))
+			{
+				HAL_DAC_Stop_DMA(&hdac1, DAC1_CHANNEL_1);
+				sinSample = freqtime2 / (setF);
+				pul_offset = (outOffset/2)*(4096)/3300;
+				pul_pkpk = (outAmplitude/2)*(4096)/3300;
+				Pulsine(sinSample);
+				HAL_DAC_Start_DMA(&hdac1, DAC1_CHANNEL_1, sine_val, sinSample,DAC_ALIGN_12B_R);
+				restartdacflag = 0;
+				lcdOnFlag = 0;  // end work of 21905657
+				premode2 = PULSE;
+				set2 = NONE;
+				output_lcd = 1;
+			}
+		}//restartDAC
+		//MENU START//
+						middle = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_3);
+						down = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_15);
+						up = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_11);
+						left = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13);
+						right = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_10);
+
+						if (buttonStateMiddle == 0)
+
+						{
+							if ((middle == GPIO_PIN_RESET) && ((HAL_GetTick() - tLast1) >= 10))
+
+							{
+
+								buttonStateMiddle = 1;
+								tLast1 = HAL_GetTick();
+							}
+						}
+
+						else if (buttonStateMiddle == 1)
+
+						{
+							if ((middle == GPIO_PIN_SET) && ((HAL_GetTick() - tLast1) >= 10))
+
+							{
+
+								buttonStateMiddle = 0;
+								tLast1 = HAL_GetTick();
+								if(change == 1)
+								{
+									if(display_state == MENU_STATE)
+
+									{
+										display_state = MEASURE_STATE;
+									}
+
+									else if(display_state == MEASURE_STATE)
+
+									{
+										display_state = MENU_STATE;
+									}
+
+									HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, display_state-2);
+
+									menucheck = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_8);
+								}
+
+							}
+							confirm = 1;
+							eval = 1;
+						}
+
+
+
+
+						//---------------------------------------------------------------------------------
+
+						if (buttonStateDown == 0)
+
+						{
+							if ((down == GPIO_PIN_RESET) && ((HAL_GetTick() - tLast1) >= 10))
+
+							{
+								buttonStateDown = 1;
+								tLast1 = HAL_GetTick();
+							}
+						}
+
+						else if (buttonStateDown == 1)
+
+						{
+							if ((down == GPIO_PIN_SET) && ((HAL_GetTick() - tLast1) >= 10))
+
+							{
+
+								buttonStateDown = 0;
+								tLast1 = HAL_GetTick();
+								level++;
+								horilevel = 0;
+							}
+							eval = 1;
+						}
+
+
+
+						//---------------------------------------------------------------------------------
+
+						if (buttonStateUp == 0)
+
+						{
+							if ((up == GPIO_PIN_RESET) && ((HAL_GetTick() - tLast1) >= 10))
+
+							{
+								buttonStateUp = 1;
+								tLast1 = HAL_GetTick();
+							}
+						}
+
+						else if (buttonStateUp == 1)
+
+						{
+							if ((up == GPIO_PIN_SET) && ((HAL_GetTick() - tLast1) >= 10))
+
+							{
+								buttonStateUp = 0;
+								tLast1 = HAL_GetTick();
+								level--;
+								if(level  < 0 )
+								{
+									level = 0;
+								}
+								horilevel = 0;
+							}
+							eval = 1;
+						}
+
+						//---------------------------------------------------------------------------------
+
+						if (buttonStateRight == 0)
+
+						{
+							if ((right == GPIO_PIN_RESET) && ((HAL_GetTick() - tLast1) >= 10))
+
+							{
+								buttonStateRight = 1;
+								tLast1 = HAL_GetTick();
+							}
+						}
+
+						else if (buttonStateRight == 1)
+
+						{
+							if ((right == GPIO_PIN_SET) && ((HAL_GetTick() - tLast1) >= 10))
+
+							{
+								buttonStateRight = 0;
+								tLast1 = HAL_GetTick();
+								horilevel++;
+							}
+							eval = 1;
+						}
+
+						//---------------------------------------------------------------------------------
+
+						if (buttonStateLeft == 0)
+
+						{
+							if ((left == GPIO_PIN_RESET) && ((HAL_GetTick() - tLast1) >= 10))
+
+							{
+
+								buttonStateLeft = 1;
+								tLast1 = HAL_GetTick();
+							}
+						}
+
+						else if (buttonStateLeft == 1)
+
+						{
+							if ((left == GPIO_PIN_SET) && ((HAL_GetTick() - tLast1) >= 10))
+
+							{
+								buttonStateLeft = 0;
+								tLast1 = HAL_GetTick();
+								horilevel--;
+							}
+							eval = 1;
+						}
+
+
+
+						//---------------------------------------------------------------------------------
+
+
+						//MENU END//
+
+
+						/* USER CODE END WHILE */
+
+						/* USER CODE BEGIN 3 */
+
+						//levelEval//
+						if(menucheck == 0)
+						{
+							menucheck = 2;
+							level = 0;
+						}
+
+						if(menucheck == 2)
+						{
+							level = 0;
+
+							if(premode == NONE)
+							{
+								Lcd_cursor(&lcd, 0, 0);
+								Lcd_string(&lcd, "1.234V");
+							}
+
+							if(output_lcd == 1)
+							{
+								//Lcd_cursor(&lcd, 1, 0);
+								//Lcd_string(&lcd, "Output ON");
+								output_lcd = 2;
+
+								if(premode2 == DC)
+								{
+
+									if(set2 == NONE || change2 == 1)
+									{
+										if(outOffset >= 1000)
+										{
+											Lcd_cursor(&lcd, 1, 0);
+											Lcd_int(&lcd, Offarr[0]);
+											Lcd_string(&lcd, ".");
+											Lcd_int(&lcd, Offarr[1]);
+											Lcd_int(&lcd, Offarr[2]);
+											Lcd_int(&lcd, Offarr[3]);
+										}
+
+										if(outOffset < 1000)
+										{
+											Lcd_cursor(&lcd, 1, 0);
+											Lcd_int(&lcd, 0);
+											Lcd_string(&lcd, ".");
+											Lcd_int(&lcd, Offarr[1]);
+											Lcd_int(&lcd, Offarr[2]);
+											Lcd_int(&lcd, Offarr[3]);
+										}
+
+										if(outOffset == 0)
+										{
+											Lcd_cursor(&lcd, 1, 0);
+											Lcd_int(&lcd, 0);
+											Lcd_cursor(&lcd, 1, 1);
+											Lcd_int(&lcd, 0);
+											Lcd_cursor(&lcd, 1, 2);
+											Lcd_int(&lcd, 0);
+											Lcd_cursor(&lcd, 1, 3);
+											Lcd_int(&lcd, 0);
+										}
+
+										change2 = 0;
+										set2 = DC;
+										Lcd_cursor(&lcd, 1, 5);
+										Lcd_string(&lcd, "V");
+									}
+								}
+
+								if(premode2 == SIN)
+								{
+									if(set2 == NONE || change2 == 1)
+									{
+										if(outOffset >= 1000)
+										{
+											Lcd_cursor(&lcd, 1, 0);
+											Lcd_int(&lcd, Offarr[0]);
+											Lcd_string(&lcd, ".");
+											Lcd_int(&lcd, Offarr[1]);
+											Lcd_int(&lcd, Offarr[2]);
+											//Lcd_int(&lcd, Offarr[3]);
+										}
+
+										if(outOffset < 1000)
+										{
+											Lcd_cursor(&lcd, 1, 0);
+											Lcd_int(&lcd, 0);
+											Lcd_string(&lcd, ".");
+											Lcd_int(&lcd, Offarr[1]);
+											Lcd_int(&lcd, Offarr[2]);
+											//Lcd_int(&lcd, Offarr[3]);
+										}
+
+										if(outOffset == 0)
+										{
+											Lcd_cursor(&lcd, 1, 0);
+											Lcd_int(&lcd, 0);
+											Lcd_string(&lcd, ".");
+											Lcd_int(&lcd, 0);
+											Lcd_int(&lcd, 0);
+											//Lcd_cursor(&lcd, 1, 3);
+											//Lcd_int(&lcd, 0);
+										}
+
+										change2 = 0;
+										set2 = DC;
+										Lcd_cursor(&lcd, 1, 4);
+										Lcd_string(&lcd, ",");
+
+										if(outAmplitude >= 1000)
+										{
+											Lcd_cursor(&lcd, 1, 5);
+											Lcd_int(&lcd, Amparr[0]);
+											Lcd_string(&lcd, ".");
+											Lcd_int(&lcd, Amparr[1]);
+											Lcd_int(&lcd, Amparr[2]);
+											//Lcd_int(&lcd, Amparr[3]);
+										}
+
+										if(outAmplitude < 1000)
+										{
+											Lcd_cursor(&lcd, 1, 5);
+											Lcd_int(&lcd, 0);
+											Lcd_string(&lcd, ".");
+											Lcd_int(&lcd, Amparr[1]);
+											Lcd_int(&lcd, Amparr[2]);
+											//Lcd_int(&lcd, Amparr[3]);
+										}
+
+										if(outAmplitude == 0)
+										{
+											Lcd_cursor(&lcd, 1, 5);
+											Lcd_int(&lcd, 0);
+											Lcd_string(&lcd, ".");
+											Lcd_int(&lcd, 0);
+											Lcd_int(&lcd, 0);
+											//Lcd_cursor(&lcd, 1, 8);
+											//Lcd_int(&lcd, 0);
+										}
+
+										Lcd_cursor(&lcd, 1, 9);
+										Lcd_string(&lcd, ",");
+
+										if(setF >= 1000)
+										{
+											Lcd_cursor(&lcd, 1, 10);
+											Lcd_int(&lcd, Freqarr[0]);
+											Lcd_int(&lcd, Freqarr[1]);
+											Lcd_int(&lcd, Freqarr[2]);
+											Lcd_int(&lcd, Freqarr[3]);
+										}
+
+										if(setF < 1000)
+										{
+											Lcd_cursor(&lcd, 1, 10);
+											Lcd_int(&lcd, 0);
+											Lcd_int(&lcd, Freqarr[1]);
+											Lcd_int(&lcd, Freqarr[2]);
+											Lcd_int(&lcd, Freqarr[3]);
+										}
+
+										if(setF == 0)
+										{
+											Lcd_cursor(&lcd, 1, 10);
+											Lcd_int(&lcd, 0);
+											Lcd_cursor(&lcd, 1, 11);
+											Lcd_int(&lcd, 0);
+											Lcd_cursor(&lcd, 1, 12);
+											Lcd_int(&lcd, 0);
+											Lcd_cursor(&lcd, 1, 13);
+											Lcd_int(&lcd, 0);
+										}
+
+
+									}
+								}
+
+								if(premode2 == PULSE)
+								{
+									if(set2 == NONE)
+									{
+										if(outOffset >= 1000)
+										{
+											Lcd_cursor(&lcd, 1, 0);
+											Lcd_int(&lcd, Offarr[0]);
+											Lcd_string(&lcd, ".");
+											Lcd_int(&lcd, Offarr[1]);
+											//Lcd_int(&lcd, Offarr[2]);
+											//Lcd_int(&lcd, Offarr[3]);
+										}
+
+										if(outOffset < 1000)
+										{
+											Lcd_cursor(&lcd, 1, 0);
+											Lcd_int(&lcd, 0);
+											Lcd_string(&lcd, ".");
+											Lcd_int(&lcd, Offarr[1]);
+											//Lcd_int(&lcd, Offarr[2]);
+											//Lcd_int(&lcd, Offarr[3]);
+										}
+
+										if(outOffset == 0)
+										{
+											Lcd_cursor(&lcd, 1, 0);
+											Lcd_int(&lcd, 0);
+											Lcd_string(&lcd, ".");
+											Lcd_int(&lcd, 0);
+											//Lcd_cursor(&lcd, 1, 2);
+											//Lcd_int(&lcd, 0);
+											//Lcd_cursor(&lcd, 1, 3);
+											//Lcd_int(&lcd, 0);
+										}
+
+										change2 = 0;
+										set2 = DC;
+										Lcd_cursor(&lcd, 1, 3);
+										Lcd_string(&lcd, ",");
+
+										if(outAmplitude >= 1000)
+										{
+											Lcd_cursor(&lcd, 1, 4);
+											Lcd_int(&lcd, Amparr[0]);
+											Lcd_string(&lcd, ".");
+											Lcd_int(&lcd, Amparr[1]);
+											//Lcd_int(&lcd, Amparr[2]);
+											//Lcd_int(&lcd, Amparr[3]);
+										}
+
+										if(outAmplitude < 1000)
+										{
+											Lcd_cursor(&lcd, 1, 4);
+											Lcd_int(&lcd, 0);
+											Lcd_string(&lcd, ".");
+											Lcd_int(&lcd, Amparr[1]);
+											//Lcd_int(&lcd, Amparr[2]);
+											//Lcd_int(&lcd, Amparr[3]);
+										}
+
+										if(outAmplitude == 0)
+										{
+											Lcd_cursor(&lcd, 1, 4);
+											Lcd_int(&lcd, 0);
+											Lcd_string(&lcd, ".");
+											Lcd_int(&lcd, 0);
+											//Lcd_cursor(&lcd, 1, 6);
+											//Lcd_int(&lcd, 0);
+											//Lcd_cursor(&lcd, 1, 8);
+											//Lcd_int(&lcd, 0);
+										}
+
+										Lcd_cursor(&lcd, 1, 7);
+										Lcd_string(&lcd, ",");
+
+										if(setF >= 1000)
+										{
+											Lcd_cursor(&lcd, 1, 8);
+											Lcd_int(&lcd, Freqarr[0]);
+											Lcd_int(&lcd, Freqarr[1]);
+											Lcd_int(&lcd, Freqarr[2]);
+											Lcd_int(&lcd, Freqarr[3]);
+										}
+
+										if(setF < 1000)
+										{
+											Lcd_cursor(&lcd, 1, 8);
+											Lcd_int(&lcd, 0);
+											Lcd_int(&lcd, Freqarr[1]);
+											Lcd_int(&lcd, Freqarr[2]);
+											Lcd_int(&lcd, Freqarr[3]);
+										}
+
+										if(setF == 0)
+										{
+											Lcd_cursor(&lcd, 1, 8);
+											Lcd_int(&lcd, 0);
+											Lcd_cursor(&lcd, 1, 9);
+											Lcd_int(&lcd, 0);
+											Lcd_cursor(&lcd, 1, 10);
+											Lcd_int(&lcd, 0);
+											Lcd_cursor(&lcd, 1, 11);
+											Lcd_int(&lcd, 0);
+										}
+										set2 = DC;
+										Lcd_cursor(&lcd, 1, 12);
+										Lcd_string(&lcd, ",");
+
+										if(pul_duty > 1000)
+										{
+											Lcd_cursor(&lcd, 1, 13);
+											//Lcd_int(&lcd, DutyCarr[0]);
+											Lcd_int(&lcd, DutyCarr[1]);
+											Lcd_int(&lcd, DutyCarr[2]);
+											Lcd_int(&lcd, DutyCarr[3]);
+										}
+
+										if(pul_duty < 1000)
+										{
+											Lcd_cursor(&lcd, 1, 13);
+											//Lcd_int(&lcd, 0);
+											Lcd_int(&lcd, DutyCarr[1]);
+											Lcd_int(&lcd, DutyCarr[2]);
+											Lcd_int(&lcd, DutyCarr[3]);
+										}
+
+										if(pul_duty == 0)
+										{
+											Lcd_cursor(&lcd, 1, 13);
+											Lcd_int(&lcd, 0);
+											Lcd_cursor(&lcd, 1, 14);
+											Lcd_int(&lcd, 0);
+											Lcd_cursor(&lcd, 1, 15);
+											Lcd_int(&lcd, 0);
+										}
+
+									}
+								}
+
+							}
+
+							if(output_lcd == 0)
+							{
+								Lcd_cursor(&lcd, 1, 0);
+								Lcd_string(&lcd, "Output OFF");
+								output_lcd = 3;
+							}
+
+
+
+							if(premode == DCV)
+							{
+								if(set == NONE)
+								{
+									Lcd_cursor(&lcd, 0, 0);
+									Lcd_string(&lcd, "DC ");
+									Lcd_cursor(&lcd, 0, 7);
+									Lcd_string(&lcd, " ");
+									Lcd_cursor(&lcd, 0, 8);
+									Lcd_string(&lcd, "mV      ");
+									set = DCV;
+									lcddis = vave*1000;
+									if(lcddis > 1000 )
+									{
+										Lcd_cursor(&lcd, 0, 3);
+										Lcd_int(&lcd, lcddis);
+									}
+									if(lcddis < 1000)
+									{
+										Lcd_cursor(&lcd, 0, 3);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 0, 4);
+										Lcd_int(&lcd, lcddis);
+									}
+									if(lcddis < 100)
+									{
+										Lcd_cursor(&lcd, 0, 3);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 0, 4);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 0, 5);
+										Lcd_int(&lcd, lcddis);
+									}
+									if(lcddis < 10)
+									{
+										Lcd_cursor(&lcd, 0, 3);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 0, 4);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 0, 5);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 0, 6);
+										Lcd_int(&lcd, lcddis);
+									}
+								}
+
+								if(vave*1000 > lcddis*1.05 || vave*1000 < lcddis*0.95 )
+								{
+									lcddis = vave*1000;
+									if(lcddis > 1000 )
+									{
+										Lcd_cursor(&lcd, 0, 3);
+										Lcd_int(&lcd, lcddis);
+									}
+									if(lcddis < 1000)
+									{
+										Lcd_cursor(&lcd, 0, 3);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 0, 4);
+										Lcd_int(&lcd, lcddis);
+									}
+									if(lcddis < 100)
+									{
+										Lcd_cursor(&lcd, 0, 3);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 0, 4);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 0, 5);
+										Lcd_int(&lcd, lcddis);
+									}
+									if(lcddis < 10)
+									{
+										Lcd_cursor(&lcd, 0, 3);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 0, 4);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 0, 5);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 0, 6);
+										Lcd_int(&lcd, lcddis);
+									}
+
+
+								}
+
+
+							}
+
+							if(premode == ACV)
+							{
+								if(set == NONE)
+								{
+									Lcd_cursor(&lcd, 0, 0);
+									Lcd_string(&lcd, "AC ");
+									set = ACV;
+
+/*
+									lcddis1 = vave;
+									Lcd_cursor(&lcd, 0, 3);
+									Lcd_int(&lcd, vave);
+*/
+									lcddis1 = vave;
+									Lcd_cursor(&lcd, 0, 3);
+									Lcd_int(&lcd, MeasOffarr[0]);
+									Lcd_string(&lcd, ".");
+									Lcd_int(&lcd, MeasOffarr[1]);
+									Lcd_string(&lcd, ",");
+
+									//MeasAmparr
+									//MeasOffarr
+
+									lcddis2 = amplitude;
+									Lcd_cursor(&lcd, 0, 7);
+									Lcd_int(&lcd, MeasAmparr[0]);
+									Lcd_string(&lcd, ".");
+									Lcd_int(&lcd, MeasAmparr[1]);
+									Lcd_string(&lcd, ",");
+
+									lcddis = prfreq;
+									Lcd_cursor(&lcd, 0, 11);
+									Lcd_int(&lcd, prfreq);
+
+
+								}
+
+
+
+								if(vave > lcddis1*1.05 || vave < lcddis1*0.95)
+								{//Offset
+									Lcd_cursor(&lcd, 0, 3);
+									Lcd_int(&lcd, MeasOffarr[0]);
+									Lcd_string(&lcd, ".");
+									Lcd_int(&lcd, MeasOffarr[1]);
+									Lcd_string(&lcd, ",");
+
+
+									lcddis1 = vave;
+								}
+
+								if(amplitude > lcddis2*1.05 || amplitude < lcddis2*0.95)
+								{//Amplitude
+
+									Lcd_cursor(&lcd, 0, 7);
+									Lcd_int(&lcd, MeasAmparr[0]);
+									Lcd_string(&lcd, ".");
+									Lcd_int(&lcd, MeasAmparr[1]);
+									Lcd_string(&lcd, ",");
+
+									lcddis2 = amplitude;
+								}
+
+								if(prfreq > lcddis*1.05 || prfreq < lcddis*0.95)
+								{//frequency
+									Lcd_cursor(&lcd, 0, 11);
+									Lcd_int(&lcd, prfreq);
+									lcddis = prfreq;
+								}
+
+							}
+
+							if(premode == DCC)
+							{
+								if(set == NONE)
+								{
+									Lcd_cursor(&lcd, 0, 0);
+									Lcd_string(&lcd, "DCC ");
+									Lcd_cursor(&lcd, 0, 7);
+									Lcd_string(&lcd, " ");
+									Lcd_cursor(&lcd, 0, 8);
+									Lcd_string(&lcd, "mA      ");
+									set = DCC;
+								}
+							}
+
+							if(premode == ACC)
+							{
+								if(set == NONE)
+								{
+									Lcd_cursor(&lcd, 0, 0);
+									Lcd_string(&lcd, "ACC ");
+									Lcd_cursor(&lcd, 0, 7);
+									Lcd_string(&lcd, " ");
+									Lcd_cursor(&lcd, 0, 8);
+									Lcd_string(&lcd, "mA      ");
+									set = ACC;
+								}
+							}
+
+
+
+						}
+
+						if(menucheck == 1)
+						{
+							output_lcd = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4);
+							set = NONE;
+							set2 = NONE;
+							change = 0;
+
+							if(eval == 1)
+							{
+								mode = NONE;
+
+								if(level == 0)
+								{
+									Lcd_clear(&lcd);
+									Lcd_string(&lcd, "MENU");
+									change = 1;
+								}
+
+								///LEVEL 1////
+								if(level == 1 && horilevel == 0)
+								{
+									LFlag1 = 0;
+									Lcd_clear(&lcd);
+									Lcd_string(&lcd, "Measurement Mode");
+								}
+
+								if(level == 1 && horilevel != 0)
+								{
+									if(horilevel == 1)
+									{
+										LFlag1 = 1;
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "SignalGeneration");
+									}
+
+									if(horilevel > 1)
+									{
+										LFlag1 = 0;
+										horilevel = 0;
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "Measurement Mode");
+
+									}
+
+									if(horilevel < 0)
+									{
+										LFlag1 = 1;
+										horilevel = 1;
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "SignalGeneration");
+									}
+								}
+								///LEVEL 1 END////
+
+
+								///////LEVEL 2///////
+
+								if(level >= 2 && LFlag1 == 0)
+								{
+
+									if(level > 2)
+									{
+										level = 2;
+									}
+									if(horilevel == 0)
+									{
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "DC Voltage");
+										mode = DCV;
+
+									}
+
+									if(horilevel < 0)
+									{
+										horilevel = 3;
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "AC Current");
+										mode = ACC;
+
+									}
+									if(horilevel == 1)
+									{
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "DC Current");
+										mode = DCC;
+
+									}
+									if(horilevel == 2)
+									{
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "AC Voltage");
+										mode = ACV;
+
+									}
+									if(horilevel == 3)
+									{
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "AC Current");
+										mode = ACC;
+
+									}
+
+									if(horilevel > 3)
+									{
+										horilevel = 0;
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "DC Voltage");
+										mode = DCV;
+
+									}
+								}
+
+								if(level == 2 && LFlag1 == 1)
+								{
+
+									if(horilevel == 0)
+									{
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "Type");
+										LFlag2 = 0;
+									}
+									if(horilevel == 1)
+									{
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "Parameter");
+										LFlag2 = 1;
+									}
+									if(horilevel == 2)
+									{
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "Output");
+										LFlag2 = 2;
+									}
+									if(horilevel < 0)
+									{
+										horilevel = 2;
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "Output");
+										LFlag2 = 2;
+									}
+									if(horilevel > 2)
+									{
+										horilevel = 0;
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "Type");
+										LFlag2 = 0;
+									}
+
+								}
+
+								if( level >= 3 && LFlag2 == 0)
+								{
+									if(level > 3)
+									{
+										level = 3;
+									}
+
+									if(horilevel < 0)
+									{
+										horilevel = 2;
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "Pulse");
+										mode = PULSE;
+									}
+									if(horilevel == 0)
+									{
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "DC");
+										mode = DC;
+									}
+									if(horilevel == 1)
+									{
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "Sinusoidal");
+										mode = SIN;
+									}
+									if(horilevel == 2)
+									{
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "Pulse");
+										mode = PULSE;
+									}
+									if(horilevel > 2)
+									{
+										horilevel = 0;
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "DC");
+										mode = DC;
+									}
+
+								}
+
+								if( level == 3 && LFlag2 == 1)
+								{
+									first_time = 1;
+
+									if(horilevel < 0)
+									{
+										horilevel = 3;
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "Duty Cycle");
+										mode = DUTY;
+										LFlag3 = 3;
+									}
+									if(horilevel == 0)
+									{
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "Amplitude");
+										mode = AMP;
+										LFlag3 = 0;
+
+									}
+									if(horilevel == 1)
+									{
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "Offset");
+										mode = OFFSET;
+										LFlag3 = 1;
+									}
+									if(horilevel == 2)
+									{
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "Frequency");
+										mode = FREQ;
+										LFlag3 = 2;
+									}
+									if(horilevel == 3)
+									{
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "Duty Cycle*");
+										mode = DUTY;
+										LFlag3 = 3;
+									}
+									if(horilevel > 3)
+									{
+										horilevel = 0;
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "Amplitude");
+										mode = AMP;
+										LFlag3 = 0;
+									}
+
+								}
+
+								if( level >= 3 && LFlag2 == 2)
+								{
+									if(level > 3)
+									{
+										level = 3;
+									}
+
+									if(horilevel == 0)
+									{
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "ON");
+										mode = ON;
+									}
+									if(horilevel == 1)
+									{
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "OFF");
+										mode = OFF;
+									}
+									if(horilevel < 0)
+									{
+										horilevel = 1;
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "OFF");
+										mode = OFF;
+									}
+									if(horilevel > 1)
+									{
+										horilevel = 0;
+										Lcd_clear(&lcd);
+										Lcd_string(&lcd, "ON");
+										mode = ON;
+									}
+
+								}
+
+								///////LEVEL 2 END ///////
+
+								if(level >= 4 && LFlag3 == 0)
+								{// 0000 to 3100
+									if(level > 4)
+									{
+										level = 4;
+									}
+									mode = AMP;
+
+									zeroes = horilevel*100;
+
+									if(first_time)
+									{
+										zeroes = outAmplitude;
+										first_time = 0;
+										horilevel = outAmplitude/100;
+									}
+
+									if(zeroes == 0)
+									{
+										zeroes = 0000;
+										Lcd_cursor(&lcd, 1, 0);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 1, 1);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 1, 2);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 1, 3);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 1, 5);
+										Lcd_string(&lcd, "   ");
+									}
+
+									if(zeroes < 0)
+									{
+										horilevel = 31;
+										zeroes = 3100;
+									}
+									if(zeroes > 3100)
+									{
+										horilevel = 0;
+										zeroes = 0000;
+									}
+									if(zeroes >= 1000)
+									{
+										zero = 0;
+									}
+									if( zeroes < 1000)
+									{
+										zero = 0;
+										Lcd_cursor(&lcd, 1, 0);
+										Lcd_int(&lcd, zero);
+										Lcd_cursor(&lcd, 1, 5);
+										Lcd_string(&lcd, "   ");
+										zero = 1;
+									}
+									if(zero == 1)
+									{
+										Lcd_cursor(&lcd, 1, 1);
+										Lcd_int(&lcd, zeroes);
+										Lcd_cursor(&lcd, 1, 5);
+										Lcd_string(&lcd, "   ");
+									}
+									if(zero == 0)
+									{
+										Lcd_cursor(&lcd, 1, 0);
+										Lcd_int(&lcd, zeroes);
+										Lcd_cursor(&lcd, 1, 5);
+										Lcd_string(&lcd, "   ");
+									}
+
+
+								}
+								if(level >= 4 && LFlag3 == 1)
+								{//Offset 0000 to 3200
+									if(level > 4)
+									{
+										level = 4;
+									}
+
+									mode = OFFSET;
+									zeroes = horilevel*100;
+
+									if(first_time)
+									{
+										zeroes = outOffset;
+										first_time = 0;
+										horilevel = outOffset/100;
+									}
+
+									if(zeroes == 0)
+									{
+										zeroes = 0000;
+										Lcd_cursor(&lcd, 1, 0);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 1, 1);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 1, 2);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 1, 3);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 1, 5);
+										Lcd_string(&lcd, "   ");
+									}
+
+									if(zeroes < 0)
+									{
+										horilevel = 32;
+										zeroes = 3200;
+									}
+									if(zeroes > 3200)
+									{
+										horilevel = 0;
+										zeroes = 0000;
+									}
+									if(zeroes >= 1000)
+									{
+										zero = 0;
+									}
+									if( zeroes < 1000)
+									{
+										zero = 0;
+										Lcd_cursor(&lcd, 1, 0);
+										Lcd_int(&lcd, zero);
+										Lcd_cursor(&lcd, 1, 5);
+										Lcd_string(&lcd, "   ");
+										zero = 1;
+									}
+									if(zero == 1)
+									{
+										Lcd_cursor(&lcd, 1, 1);
+										Lcd_int(&lcd, zeroes);
+										Lcd_cursor(&lcd, 1, 5);
+										Lcd_string(&lcd, "   ");
+									}
+									if(zero == 0)
+									{
+										Lcd_cursor(&lcd, 1, 0);
+										Lcd_int(&lcd, zeroes);
+										Lcd_cursor(&lcd, 1, 5);
+										Lcd_string(&lcd, "   ");
+									}
+
+								}
+								if(level >= 4 && LFlag3 == 2)
+								{
+									if(level > 4)
+									{
+										level = 4;
+									}
+
+									mode = FREQ;
+									zeroes = horilevel*100;
+
+									if(first_time)
+									{
+										zeroes = setF;
+										first_time = 0;
+										horilevel = setF/100;
+									}
+
+									if(zeroes == 0)
+									{
+										zeroes = 0000;
+										Lcd_cursor(&lcd, 1, 0);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 1, 1);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 1, 2);
+										Lcd_int(&lcd, 1);
+										Lcd_cursor(&lcd, 1, 3);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 1, 5);
+										Lcd_string(&lcd, "   ");
+
+									}
+
+									if(zeroes < 0)
+									{
+										horilevel = 50;
+										zeroes = 5000;
+									}
+									if(zeroes > 5000)
+									{
+										horilevel = 0;
+										zeroes = 0000;
+										Lcd_cursor(&lcd, 1, 0);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 1, 1);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 1, 2);
+										Lcd_int(&lcd, 1);
+										Lcd_cursor(&lcd, 1, 3);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 1, 5);
+										Lcd_string(&lcd, "   ");
+
+										}
+									if(zeroes >= 1000)
+									{
+										zero = 0;
+									}
+									if( zeroes < 1000)
+									{
+										zero = 0;
+										Lcd_cursor(&lcd, 1, 0);
+										Lcd_int(&lcd, zero);
+										Lcd_cursor(&lcd, 1, 5);
+										Lcd_string(&lcd, "   ");
+										zero = 1;
+									}
+									if(zero == 1)
+									{
+										Lcd_cursor(&lcd, 1, 1);
+										Lcd_int(&lcd, zeroes);
+										Lcd_cursor(&lcd, 1, 5);
+										Lcd_string(&lcd, "   ");
+
+									}
+									if(zero == 0)
+									{
+										Lcd_cursor(&lcd, 1, 0);
+										Lcd_int(&lcd, zeroes);
+										Lcd_cursor(&lcd, 1, 5);
+										Lcd_string(&lcd, "   ");
+									}
+
+								}
+								if(level >= 4 && LFlag3 == 3)
+								{
+									if(level > 4)
+									{
+										level = 4;
+									}
+									mode = DUTY;
+									zeroes = horilevel*10;
+
+									if(first_time)
+									{
+										zeroes = pul_duty;
+										first_time = 0;
+										horilevel = pul_duty/10;
+									}
+
+									if(zeroes == 0)
+									{
+										zeroes = 0000;
+										Lcd_cursor(&lcd, 1, 0);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 1, 1);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 1, 2);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 1, 3);
+										Lcd_int(&lcd, 0);
+										Lcd_cursor(&lcd, 1, 5);
+										Lcd_string(&lcd, "   ");
+									}
+
+									if(zeroes < 0)
+									{
+										horilevel = 10;
+										zeroes = 100;
+									}
+									if(zeroes > 100)
+									{
+										horilevel = 0;
+										zeroes = 0000;
+									}
+									if(zeroes >= 100)
+									{
+										zero = 0;
+									}
+									if( zeroes < 100)
+									{
+										zero = 0;
+										Lcd_cursor(&lcd, 1, 0);
+										Lcd_int(&lcd, zero);
+										Lcd_cursor(&lcd, 1, 1);
+										Lcd_int(&lcd, zero);
+										Lcd_cursor(&lcd, 1, 5);
+										Lcd_string(&lcd, "   ");
+										zero = 1;
+									}
+									if(zero == 1)
+									{
+										Lcd_cursor(&lcd, 1, 2);
+										Lcd_int(&lcd, zeroes);
+										Lcd_cursor(&lcd, 1, 5);
+										Lcd_string(&lcd, "   ");
+									}
+									if(zero == 0)
+									{
+										Lcd_cursor(&lcd, 1, 1);
+										Lcd_int(&lcd, zeroes);
+										Lcd_cursor(&lcd, 1, 5);
+										Lcd_string(&lcd, "   ");
+									}
+
+
+								}
+
+
+								//END
+								eval = 0;
+							}
+
+
+							//select//
+							if(confirm == 1)
+							{
+								restartdacflag = 1;
+
+								//Measure Mode//
+								switch(mode)
+								{
+								case DCV:
+									Lcd_cursor(&lcd, 1, 0);
+									Lcd_string(&lcd, "DC Voltage Set");
+									HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, 1);
+									HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 0);
+									rxCompleteFlag = 1;
+									fulldata[2] = '$';
+									fulldata[4] = 'D';
+									fulldata[5] = 'V';
+									adcComplete = 1;
+									premode = DCV;
+									set = NONE;
+									break;
+								case ACV:
+									Lcd_cursor(&lcd, 1, 0);
+									Lcd_string(&lcd, "AC Voltage Set");
+									HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, 1);
+									HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 0);
+									rxCompleteFlag = 1;
+									fulldata[2] = '$';
+									fulldata[4] = 'A';
+									fulldata[5] = 'V';
+									premode = ACV;
+									set = NONE;
+
+									break;
+								case DCC:
+									Lcd_cursor(&lcd, 1, 0);
+									Lcd_string(&lcd, "DC Current Set");
+									HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, 1);
+									HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 1);
+									rxCompleteFlag = 1;
+									fulldata[2] = '$';
+									fulldata[4] = 'D';
+									fulldata[5] = 'I';
+									premode = DCC;
+									set = NONE;
+
+									break;
+								case ACC:
+									Lcd_cursor(&lcd, 1, 0);
+									Lcd_string(&lcd, "AC Current Set");
+									HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, 1);
+									HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 1);
+									rxCompleteFlag = 1;
+									fulldata[2] = '$';
+									fulldata[4] = 'A';
+									fulldata[5] = 'I';
+									premode = ACC;
+									set = NONE;
+
+									break;
+								case NONE:
+									Lcd_cursor(&lcd, 1, 0);
+									Lcd_string(&lcd, "            ");
+									break;
+								case DC:
+									Lcd_cursor(&lcd, 1, 0);
+									Lcd_string(&lcd, "DC Wave set");
+									premode2 = DC;
+									rxCompleteFlag = 1;
+									fulldata[0] = '@';
+									fulldata[1] = ',';
+									fulldata[2] = '^';
+									fulldata[3] = ',';
+									fulldata[4] = 't';
+									fulldata[5] = ',';
+									fulldata[6] = 'd';
+									fulldata[7] = ',';
+									fulldata[8] = '!';
+									set2 = NONE;
+									break;
+								case SIN:
+									Lcd_cursor(&lcd, 1, 0);
+									Lcd_string(&lcd, "SIN Wave set");
+									premode2 = SIN;
+									rxCompleteFlag = 1;
+									fulldata[0] = '@';
+									fulldata[1] = ',';
+									fulldata[2] = '^';
+									fulldata[3] = ',';
+									fulldata[4] = 't';
+									fulldata[5] = ',';
+									fulldata[6] = 's';
+									fulldata[7] = ',';
+									fulldata[8] = '!';
+									set2 = NONE;
+									break;
+								case PULSE:
+									Lcd_cursor(&lcd, 1, 0);
+									Lcd_string(&lcd, "PULSE Wave set");
+									premode2 = PULSE;
+									rxCompleteFlag = 1;
+									fulldata[0] = '@';
+									fulldata[1] = ',';
+									fulldata[2] = '^';
+									fulldata[3] = ',';
+									fulldata[4] = 't';
+									fulldata[5] = ',';
+									fulldata[6] = 'p';
+									fulldata[7] = ',';
+									fulldata[8] = '!';
+									set2 = NONE;
+									break;
+								case ON:
+									Lcd_cursor(&lcd, 1, 0);
+									Lcd_string(&lcd, "OUTPUT ON");
+									HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, 1);
+									HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 0);
+									HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, 0);
+									prevOutState = 0;
+									outState = 1;
+									rxCompleteFlag = 1;
+									output_lcd = 1;
+									break;
+								case OFF:
+									Lcd_cursor(&lcd, 1, 0);
+									Lcd_string(&lcd, "OUTPUT OFF");
+									HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, 0);
+									HAL_DAC_Stop_DMA(&hdac1, DAC1_CHANNEL_1);
+									rxCompleteFlag = 1;
+									outState = 0;
+									output_lcd = 0;
+									break;
+								case AMP:
+									Lcd_cursor(&lcd, 1, 5);
+									Lcd_string(&lcd, "SET");
+									outAmplitude = zeroes;
+									break;
+								case OFFSET:
+									Lcd_cursor(&lcd, 1, 5);
+									Lcd_string(&lcd, "SET");
+									outOffset = zeroes;
+									break;
+								case FREQ:
+									Lcd_cursor(&lcd, 1, 5);
+									Lcd_string(&lcd, "SET");
+									setF = zeroes;
+									break;
+								case DUTY:
+									Lcd_cursor(&lcd, 1, 5);
+									Lcd_string(&lcd, "SET");
+									pul_duty = zeroes;
+									break;
+								default:
+									Lcd_cursor(&lcd, 1, 0);
+									Lcd_string(&lcd, "None Selected");
+									break;
+								}
+								//Measure Mode//
+
+
+
+								confirm = 0;
+							}
+
+						}
+					}/// while(1) ends here
+						//levelEval//
+
+
+						//end select//
+
+
+
+
+
+
+
+
+
+
+  /* USER CODE END 3 */
+}
+
+/**
+  * @brief System Clock Configuration
+  * @retval None
+  */
+void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
+
+  /** Initializes the CPU, AHB and APB busses clocks 
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_BYPASS;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
+  RCC_OscInitStruct.PLL.PREDIV = RCC_PREDIV_DIV1;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Initializes the CPU, AHB and APB busses clocks 
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART2|RCC_PERIPHCLK_I2C1
+                              |RCC_PERIPHCLK_TIM1|RCC_PERIPHCLK_ADC12
+                              |RCC_PERIPHCLK_TIM2;
+  PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
+  PeriphClkInit.Adc12ClockSelection = RCC_ADC12PLLCLK_DIV1;
+  PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_HSI;
+  PeriphClkInit.Tim1ClockSelection = RCC_TIM1CLK_HCLK;
+  PeriphClkInit.Tim2ClockSelection = RCC_TIM2CLK_HCLK;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+
+/**
+  * @brief ADC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC1_Init(void)
+{
+
+  /* USER CODE BEGIN ADC1_Init 0 */
+
+  /* USER CODE END ADC1_Init 0 */
+
+  ADC_MultiModeTypeDef multimode = {0};
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC1_Init 1 */
+
+  /* USER CODE END ADC1_Init 1 */
+  /** Common config 
+  */
+  hadc1.Instance = ADC1;
+  hadc1.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
+  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
+  hadc1.Init.ContinuousConvMode = DISABLE;
+  hadc1.Init.DiscontinuousConvMode = DISABLE;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
+  hadc1.Init.ExternalTrigConv = ADC_EXTERNALTRIGCONV_T1_TRGO;
+  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc1.Init.NbrOfConversion = 1;
+  hadc1.Init.DMAContinuousRequests = DISABLE;
+  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc1.Init.LowPowerAutoWait = DISABLE;
+  hadc1.Init.Overrun = ADC_OVR_DATA_OVERWRITTEN;
+  if (HAL_ADC_Init(&hadc1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Configure the ADC multi-mode 
+  */
+  multimode.Mode = ADC_MODE_INDEPENDENT;
+  if (HAL_ADCEx_MultiModeConfigChannel(&hadc1, &multimode) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Configure Regular Channel 
+  */
+  sConfig.Channel = ADC_CHANNEL_1;
+  sConfig.Rank = ADC_REGULAR_RANK_1;
+  sConfig.SingleDiff = ADC_SINGLE_ENDED;
+  sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
+  sConfig.OffsetNumber = ADC_OFFSET_NONE;
+  sConfig.Offset = 0;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC1_Init 2 */
+
+  /* USER CODE END ADC1_Init 2 */
+
+}
+
+/**
+  * @brief DAC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_DAC1_Init(void)
+{
+
+  /* USER CODE BEGIN DAC1_Init 0 */
+
+  /* USER CODE END DAC1_Init 0 */
+
+  DAC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN DAC1_Init 1 */
+
+  /* USER CODE END DAC1_Init 1 */
+  /** DAC Initialization 
+  */
+  hdac1.Instance = DAC1;
+  if (HAL_DAC_Init(&hdac1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** DAC channel OUT1 config 
+  */
+  sConfig.DAC_Trigger = DAC_TRIGGER_T2_TRGO;
+  sConfig.DAC_OutputBuffer = DAC_OUTPUTBUFFER_ENABLE;
+  if (HAL_DAC_ConfigChannel(&hdac1, &sConfig, DAC_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN DAC1_Init 2 */
+
+  /* USER CODE END DAC1_Init 2 */
+
+}
+
+/**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C1_Init(void)
+{
+
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.Timing = 0x2000090E;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Configure Analogue filter 
+  */
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Configure Digital filter 
+  */
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
+
+}
+
+/**
+  * @brief TIM1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM1_Init(void)
+{
+
+  /* USER CODE BEGIN TIM1_Init 0 */
+
+  /* USER CODE END TIM1_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+  TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
+
+  /* USER CODE BEGIN TIM1_Init 1 */
+
+  /* USER CODE END TIM1_Init 1 */
+  htim1.Instance = TIM1;
+  htim1.Init.Prescaler = 0;
+  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim1.Init.Period = 7200;
+  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim1.Init.RepetitionCounter = 0;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_PWM_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
+  sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
+  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
+  sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
+  sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
+  sBreakDeadTimeConfig.DeadTime = 0;
+  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
+  sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
+  sBreakDeadTimeConfig.BreakFilter = 0;
+  sBreakDeadTimeConfig.Break2State = TIM_BREAK2_DISABLE;
+  sBreakDeadTimeConfig.Break2Polarity = TIM_BREAK2POLARITY_HIGH;
+  sBreakDeadTimeConfig.Break2Filter = 0;
+  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
+  if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM1_Init 2 */
+
+  /* USER CODE END TIM1_Init 2 */
+
+}
+
+/**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 0;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 720;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
+  * @brief USART2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART2_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART2_Init 0 */
+
+  /* USER CODE END USART2_Init 0 */
+
+  /* USER CODE BEGIN USART2_Init 1 */
+
+  /* USER CODE END USART2_Init 1 */
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 115200;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART2_Init 2 */
+
+  /* USER CODE END USART2_Init 2 */
+
+}
+
+/** 
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void) 
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Channel3_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);
+
+}
+
+/**
+  * @brief GPIO Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_GPIO_Init(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+  /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOF_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, LD2_Pin|LED3_Pin|LED4_Pin|RS_Pin 
+                          |LED5_Pin|EN_Pin|D4_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOC, D5_Pin|D6_Pin|D7_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_11|GPIO_PIN_12 
+                          |GPIO_PIN_13|GPIO_PIN_14|GPIO_PIN_15|D3_Pin 
+                          |D5B4_Pin|D4B5_Pin|D2_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : B1_Pin */
+  GPIO_InitStruct.Pin = B1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : Middle_Button_Pin Right_Button_Pin Up_Button_Pin Left_Button_Pin */
+  GPIO_InitStruct.Pin = Middle_Button_Pin|Right_Button_Pin|Up_Button_Pin|Left_Button_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : LD2_Pin LED3_Pin LED4_Pin RS_Pin 
+                           LED5_Pin EN_Pin D4_Pin */
+  GPIO_InitStruct.Pin = LD2_Pin|LED3_Pin|LED4_Pin|RS_Pin 
+                          |LED5_Pin|EN_Pin|D4_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : D5_Pin D6_Pin D7_Pin */
+  GPIO_InitStruct.Pin = D5_Pin|D6_Pin|D7_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PB1 PB2 PB11 PB12 
+                           PB13 PB14 PB15 */
+  GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_11|GPIO_PIN_12 
+                          |GPIO_PIN_13|GPIO_PIN_14|GPIO_PIN_15;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : Down_Button_Pin */
+  GPIO_InitStruct.Pin = Down_Button_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(Down_Button_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : D3_Pin D5B4_Pin D4B5_Pin D2_Pin */
+  GPIO_InitStruct.Pin = D3_Pin|D5B4_Pin|D4B5_Pin|D2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+}
+
+/* USER CODE BEGIN 4 */
+
+void checkAndStoreUart(){
+	  if(uartRxIndex == 0){
+		  if(rdata[0] == '@'){
+
+	  fulldata[uartRxIndex] = rdata[0]; //work of 21905657
+		  }
+}
+
+	  if(fulldata[0] == '@'){
+		  fulldata[uartRxIndex] = rdata[0]; //work of 21905657
+		  if(fulldata[uartRxIndex] == '!')
+		  {
+			  uartRxIndex = 0;
+			  //testflag =1;
+			  rxCompleteFlag = 1;
+			  fulldata[0]='\0';
+		  }
+		  else
+		  {
+			  uartRxIndex++;
+		  }
+		  uartRec = 0;
+	  }
+}
+
+void processUart(){
+
+}
+
+
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) // CC https://www.youtube.com/watch?v=Yt5cHkmtqlA
+{
+	if (adcindex < sampleNumber)
+	{
+		adc_val[adcindex] = HAL_ADC_GetValue(&hadc1);
+		vsum = vsum + adc_val[adcindex];
+		adcindex++;
+	}
+	else
+	{
+		adcComplete = 1;
+		adcindex = 0;
+	}
+
+	// Toggle the Green LED
+	// HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
+}
+/* USER CODE END 4 */
+
+/**
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
+void Error_Handler(void)
+{
+  /* USER CODE BEGIN Error_Handler_Debug */
+	/* User can add his own implementation to report the HAL error return state */
+
+  /* USER CODE END Error_Handler_Debug */
+}
+
+#ifdef  USE_FULL_ASSERT
+/**
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
+void assert_failed(uint8_t *file, uint32_t line)
+{ 
+  /* USER CODE BEGIN 6 */
+  /* User can add his own implementation to report the file name and line number,
+     tex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+  /* USER CODE END 6 */
+}
+#endif /* USE_FULL_ASSERT */
+
+/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
